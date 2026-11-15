@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://android.com">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -27,7 +26,6 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
-                <category android:name="androidx.car.app.category.IOT" />
             </intent-filter>
         </service>
     </application>
