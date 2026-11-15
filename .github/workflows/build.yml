@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Clean APK
 
 on:
   push:
@@ -10,9 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -23,6 +20,164 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.4'
+
+      - name: Create Clean Android Project
+        run: |
+          mkdir -p app/src/main/java/com/example/autobrowser
+          mkdir -p app/src/main/res/xml
+
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "AutoBrowser"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.example.autobrowser'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.example.autobrowser"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.car.app:app:1.4.0'
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/res/xml/automotive_app_desc.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <automotiveApp>
+              <uses name="template" />
+          </automotiveApp>
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://android.com">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:allowBackup="true"
+                  android:label="Auto Browser"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <meta-data
+                      android:name="com.google.android.gms.car.application"
+                      android:resource="@xml/automotive_app_desc" />
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <service
+                      android:name=".AutoBrowserService"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="androidx.car.app.CarAppService" />
+                      </intent-filter>
+                  </service>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/autobrowser/MainActivity.kt
+          package com.example.autobrowser
+          import android.os.Bundle
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val webView = WebView(this)
+                  webView.settings.javaScriptEnabled = true
+                  webView.webViewClient = WebViewClient()
+                  webView.loadUrl("https://google.com")
+                  setContentView(webView)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/autobrowser/AutoBrowserService.kt
+          package com.example.autobrowser
+          import android.content.Intent
+          import androidx.car.app.CarAppService
+          import androidx.car.app.CarContext
+          import androidx.car.app.Screen
+          import androidx.car.app.Session
+          import androidx.car.app.model.Action
+          import androidx.car.app.model.MessageTemplate
+          import androidx.car.app.model.Template
+          import androidx.car.app.validation.HostValidator
+
+          class AutoBrowserService : CarAppService() {
+              override fun createHostValidator(): HostValidator {
+                  return HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
+              }
+              override fun onCreateSession(): Session {
+                  return object : Session() {
+                      override fun onCreateScreen(intent: Intent): Screen {
+                          return BrowserScreen(carContext)
+                      }
+                  }
+              }
+          }
+
+          class BrowserScreen(carContext: CarContext) : Screen(carContext) {
+              override fun onGetTemplate(): Template {
+                  return MessageTemplate.Builder("المتصفح جاهز للعمل على شاشة السيارة.")
+                      .setTitle("Auto Browser")
+                      .setHeaderAction(Action.APP_ICON)
+                      .build()
+              }
+          }
+          EOF
 
       - name: Build Debug APK
         run: gradle assembleDebug
